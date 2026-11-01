@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Local scratch (verification runs, captured output)
+.tmp/
+tmp/
+*.jsonl
+!fixtures/**/*.jsonl
+
+# Secrets — keys live in the environment, never in the repo
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials*.yaml
+.credentials.yaml
+
+# Plugin runtime logs
+*.log
+logs/
+early-stop-guard-events.jsonl
+
+# Pack artifacts
+*.tgz
+dist/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp

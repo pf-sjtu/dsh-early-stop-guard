@@ -1,0 +1,53 @@
+{
+  "name": "dsh-early-stop-guard",
+  "version": "0.1.0",
+  "description": "Stop DeepSeek Harness from ending a turn when the model only narrated its next action instead of calling a tool, judged by a decision model with an LLM fallback.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/client.js",
+    "lib/config.js",
+    "lib/decide.js",
+    "lib/events.js",
+    "lib/heuristics.js",
+    "lib/logs.js",
+    "lib/providers.js",
+    "lib/summary.js",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@deepseek-ai/schemastery": "^3.18.1"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-agent": "^0.2.1-rc.5",
+    "@deepseek-ai/dsh-llm": "^0.2.1-rc.5",
+    "@deepseek-ai/dsh-session": "^0.2.1-rc.5"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh-llm": "^0.2.1-rc.5"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
+    }
+  }
+}

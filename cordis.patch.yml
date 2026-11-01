@@ -1,0 +1,6 @@
+# Entry patch shipped with the bundle: mounting this package adds the guard to
+# the profile's Cordis layer. The market mounts the same two lines, so this file
+# stays free of config values and YAML tags.
+- insert:
+    - id: early-stop-guard
+      name: 'dsh-early-stop-guard'
