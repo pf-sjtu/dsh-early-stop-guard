@@ -63,7 +63,7 @@ ctx.on('agent/turn-stopping')
 ## 测试
 
 ```bash
-pnpm test          # node --test，67 个用例
+pnpm test          # node --test，71 个用例
 ```
 
 - 单测覆盖：`heuristics`（闸门/分类/判定矩阵）、`events`（重建事实、窗口、锚定请求）、`summary`（截断、标签）、`config`（默认值/收敛/供应商过滤）、`providers`（答案归一化、JSON 提取、熔断）、`logs`（环形、JSONL、hydrate、clear）、`decide`（整链，含 stub fetch 校验 System One 线格式）。

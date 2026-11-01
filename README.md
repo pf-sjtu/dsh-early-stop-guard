@@ -161,7 +161,7 @@ OPENAI_API_KEY=...          # 自建 OpenAI 兼容决策模型时
 
 ```bash
 pnpm install
-pnpm test        # node:test，67 个用例
+pnpm test        # node:test，71 个用例
 ```
 
 目录：
