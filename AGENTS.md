@@ -63,11 +63,12 @@ ctx.on('agent/turn-stopping')
 ## 测试
 
 ```bash
-pnpm test          # node --test，59 个用例
+pnpm test          # node --test，67 个用例
 ```
 
 - 单测覆盖：`heuristics`（闸门/分类/判定矩阵）、`events`（重建事实、窗口、锚定请求）、`summary`（截断、标签）、`config`（默认值/收敛/供应商过滤）、`providers`（答案归一化、JSON 提取、熔断）、`logs`（环形、JSONL、hydrate、clear）、`decide`（整链，含 stub fetch 校验 System One 线格式）。
-- 新增判定分支必须同时补 `test/decide.test.js` 的用例；改动阈值/顺序必须更新 `test/heuristics.test.js` 里的校准数值。
+- 集成覆盖：`test/hook.test.js` 用真实 `apply()` + 假 ctx/agent 走完「旁白→steer→再旁白→耗预算」与「真完成→零调用」两条路；`test/client-bundle.test.js` 用 `node:vm` 跑 `lib/client.js`，验证 Settings 标签页注册与词典。
+- 新增判定分支必须同时补 `test/decide.test.js` 的用例；改动阈值/顺序必须更新 `test/heuristics.test.js` 里的校准数值；改钩子接线必须补 `test/hook.test.js`。
 - 真实链路验证在隔离 profile 做：`dsh plugin --profile <name> add link:C:/Code/JS/dsh-early-stop-guard`，不要在别人正在用的 web profile 上试。
 
 ## 发布
