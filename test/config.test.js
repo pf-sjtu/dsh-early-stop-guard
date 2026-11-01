@@ -130,6 +130,19 @@ test('normalizeProvider keeps a usable decision provider', () => {
   assert.equal(provider.enabled, true)
 })
 
+test('normalizeProvider accepts every decision dialect', () => {
+  const decisions = normalizeProvider({
+    id: 'openai-3',
+    kind: 'decision',
+    protocol: 'decisions',
+    baseUrl: 'https://api.openai.com/v1',
+    model: 'gpt-6-luna',
+  }, 0)
+  assert.equal(decisions.protocol, 'decisions')
+  // An unknown dialect must not silently become something that answers differently.
+  assert.equal(normalizeProvider({ id: 'x', protocol: 'chat', baseUrl: 'https://x', model: 'm' }, 0).protocol, 'systemone')
+})
+
 test('normalizeProvider drops providers that can never answer', () => {
   // Disabled entries are removed from the live chain, not carried along.
   assert.equal(normalizeProvider({ id: 'off', enabled: false }, 0), null)

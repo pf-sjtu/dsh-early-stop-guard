@@ -38,6 +38,8 @@ ctx.on('agent/turn-stopping')
 10. **`connection.fetch.register` 的每条精确路由都要写 `requestBody`。** 省略不会报错（`assertFetchRoute` 不校验该字段），但请求会掉进共享 RPC 通道，返回 400/404；普通请求写 `'buffered'`，只有流式上传用 `'streaming'`。见 `test/routes.test.js`。
 11. **OpenAI 兼容供应商的请求体要按方言降级。** 参数名不通用：GPT-5 系拒绝 `max_tokens` 与非默认 `temperature`，vLLM/Ollama/部分代理只认 `max_tokens`。`callOpenaiCompatible` 按固定阶梯重试，**只在 400/422 且错误文本点名 `max_tokens`/`max_completion_tokens`/`temperature` 时**降级（鉴权/额度/模型名错误立即抛），成功写法按 `baseUrl|model` 缓存；`model` 为空直接抛明确错误，不发请求。见 `test/providers.test.js` 的 6 例。
 12. **密钥按供应商 id 索引。** 在设置页改掉某行 id 会让已存密钥变孤儿（判定报 `missing key`），因此 `/status` 回 `orphanKeys`（存了密钥但没有对应供应商的 id），设置页在裁判链下方提示。见 `test/routes.test.js`。
+13. **Decisions 是第三种裁判方言。** `protocol: "decisions"` 打 `POST <baseUrl>/decisions`，体为 `{ model, input, questions }`（三条 predicate 题取 `QUESTIONS`），响应 `answers[]` 按 `name` 取值后复用 `normalizeVerdict`。`gpt-6-luna` 是唯一支持它的模型，**不在 `/v1/models` 里**，所以别用模型列表判断可用性；`model` 为空同样直接抛错不发请求。见 `test/providers.test.js` 的 5 例。
+14. **概率阈值是全局的。** 没有按供应商设阈值的字段：`dm.threshold`（narrates）/`dm.waitThreshold`/`dm.askThreshold` 对所有裁判一视同仁。别把 pi 侧的端点级标定值（如 `gpt-6-luna` 的 0.65）当成这里的默认，它的输入格式与判定路径都不同。
 
 ## 模块职责
 
@@ -47,7 +49,7 @@ ctx.on('agent/turn-stopping')
 | `lib/events.js` | 事件流读取与 `summarizeTurn`/`sawToolCallSince` | 无 |
 | `lib/heuristics.js` | `precheck`/`classifyText`/`heuristicAction`/`verdictAction` | 无 |
 | `lib/summary.js` | `clipTail`/`renderSummary`/`renderState` | 无 |
-| `lib/providers.js` | System One、OpenAI 兼容（含请求体方言阶梯与缓存）、宿主 LLM 三种裁判，熔断，按序尝试，取密钥 | `ctx.llm`（仅 llm 供应商，动态 import） |
+| `lib/providers.js` | System One、OpenAI Decisions、OpenAI 兼容（含请求体方言阶梯与缓存）、宿主 LLM 四种裁判，熔断，按序尝试，取密钥 | `ctx.llm`（仅 llm 供应商，动态 import） |
 | `lib/decide.js` | 整条判定链，返回 `{ act, record, exhausted, nextUsed }` | 无（`ctx` 透传） |
 | lib/logs.js | 内存环形 + JSONL 追加 | node:fs |
 | `lib/secrets.js` | 供应商密钥的独立存储（`secrets.json`，0600，串行写） | node:fs |
@@ -68,7 +70,7 @@ ctx.on('agent/turn-stopping')
 ## 测试
 
 ```bash
-pnpm test          # node --test，93 个用例
+pnpm test          # node --test，99 个用例
 ```
 
 - 单测覆盖：`heuristics`（闸门/分类/判定矩阵）、`events`（重建事实、窗口、锚定请求）、`summary`（截断、标签）、`config`（默认值/收敛/供应商过滤/volatile 与 `unwrap`）、`providers`（答案归一化、JSON 提取、熔断）、`logs`（环形、JSONL、hydrate、clear）、`secrets`（密钥文件）、`decide`（整链，含 stub fetch 校验 System One 线格式）。

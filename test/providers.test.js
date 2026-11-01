@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {
+  callDecisions,
   callOpenaiCompatible,
   createBreaker,
   normalizeVerdict,
@@ -202,4 +203,125 @@ test('callOpenaiCompatible reports prose instead of JSON', async () => {
       )
     },
   )
+})
+
+const DECISIONS = { name: 'gpt-6-luna', protocol: 'decisions' }
+const ANSWERS = {
+  answers: [
+    { type: 'predicate', name: 'narrates', probability: 0.92 },
+    { type: 'predicate', name: 'asks_user', probability: 0.03 },
+    { type: 'predicate', name: 'waiting', probability: 0.11 },
+  ],
+}
+
+function decisionsProvider(over = {}) {
+  return {
+    id: 'openai-3',
+    kind: 'decision',
+    protocol: 'decisions',
+    baseUrl: 'https://api.openai.com/v1',
+    model: 'gpt-6-luna',
+    ...over,
+  }
+}
+
+/** Stub fetch that records the URL, headers and parsed body of every call. */
+async function withFetchCall(handler, run) {
+  const original = globalThis.fetch
+  const calls = []
+  globalThis.fetch = async (url, init) => {
+    const call = { url: String(url), headers: init.headers, body: JSON.parse(init.body) }
+    calls.push(call)
+    return handler(call)
+  }
+  try {
+    await run(calls)
+  } finally {
+    globalThis.fetch = original
+  }
+}
+
+const jsonReply = (status, body) => ({
+  ok: status >= 200 && status < 300,
+  status,
+  text: async () => JSON.stringify(body),
+  json: async () => body,
+})
+
+test('callDecisions posts the three predicate questions and reads named answers', async () => {
+  await withFetchCall(
+    () => jsonReply(200, ANSWERS),
+    async (calls) => {
+      const verdict = await callDecisions(decisionsProvider(), {
+        state: '[steps executed this turn] 1:none',
+        timeoutMs: 1000,
+        apiKey: 'sk-test',
+      })
+      assert.deepEqual(verdict, { narrates: 0.92, asksUser: 0.03, waiting: 0.11 })
+      assert.equal(calls.length, 1)
+      assert.equal(calls[0].url, 'https://api.openai.com/v1/decisions')
+      assert.equal(calls[0].headers.authorization, 'Bearer sk-test')
+      assert.equal(calls[0].body.model, 'gpt-6-luna')
+      assert.equal(calls[0].body.input, '[steps executed this turn] 1:none')
+      assert.deepEqual(calls[0].body.questions.map(question => question.type), [
+        'predicate',
+        'predicate',
+        'predicate',
+      ])
+      assert.deepEqual(calls[0].body.questions.map(question => question.name), [
+        'narrates',
+        'asks_user',
+        'waiting',
+      ])
+      for (const question of calls[0].body.questions) {
+        assert.equal(typeof question.instructions, 'string')
+        assert.ok(question.instructions.length > 0)
+      }
+    },
+  )
+})
+
+test('callDecisions sends no Authorization header without a key', async () => {
+  await withFetchCall(() => jsonReply(200, ANSWERS), async (calls) => {
+    await callDecisions(decisionsProvider(), { state: 'x', timeoutMs: 1000 })
+    assert.equal('authorization' in calls[0].headers, false)
+  })
+})
+
+test('callDecisions refuses an empty model without calling the endpoint', async () => {
+  await withFetchCall(() => jsonReply(200, ANSWERS), async (calls) => {
+    await assert.rejects(
+      callDecisions(decisionsProvider({ model: '  ' }), { state: 'x', timeoutMs: 1000 }),
+      /provider openai-3 has no model configured: fill in Model in the Settings tab/,
+    )
+    assert.equal(calls.length, 0)
+  })
+})
+
+test('callDecisions reports the status and body of a failure', async () => {
+  await withFetchCall(
+    () => jsonReply(401, { error: { message: 'Incorrect API key provided' } }),
+    async () => {
+      await assert.rejects(
+        callDecisions(decisionsProvider(), { state: 'x', timeoutMs: 1000, apiKey: 'bad' }),
+        /decisions HTTP 401: .*Incorrect API key/,
+      )
+    },
+  )
+})
+
+test('callDecisions rejects an answer set that carries no probabilities', async () => {
+  const refused = { answers: [{ type: 'refusal', name: 'narrates' }] }
+  await withFetchCall(() => jsonReply(200, refused), async () => {
+    await assert.rejects(
+      callDecisions(decisionsProvider(), { state: 'x', timeoutMs: 1000 }),
+      /decisions returned no usable answers/,
+    )
+  })
+  await withFetchCall(() => jsonReply(200, {}), async () => {
+    await assert.rejects(
+      callDecisions(decisionsProvider(), { state: 'x', timeoutMs: 1000 }),
+      /decisions returned no usable answers/,
+    )
+  })
 })

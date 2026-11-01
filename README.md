@@ -65,7 +65,7 @@ dsh plugin --profile <profile> add link:C:/Code/JS/dsh-early-stop-guard
 三个面板，都在同一个标签页里：
 
 - **策略**：总开关、每回合最多续跑次数、判定模式、三个概率阈值、注入给模型的话。改动即时保存。
-- **裁判供应商链**：按顺序尝试，先成功者生效。每行可改 kind / 协议 / Base URL / 模型 / 环境变量名 / 超时，行内直接填密钥（见下），可上下移动、可删除、可禁用；底部有「新增供应商」「新增 OpenAI 兼容决策模型」「新增 LLM 托底」三个按钮。
+- **裁判供应商链**：按顺序尝试，先成功者生效。每行可改 kind / 协议 / Base URL / 模型 / 环境变量名 / 超时，行内直接填密钥（见下），可上下移动、可删除、可禁用；底部有「新增供应商」「新增 OpenAI 兼容决策模型」「新增 OpenAI Decisions（gpt-6-luna）」「新增 LLM 托底」四个按钮。
 - **试判 + 判定记录**：粘贴一段正文立刻看判定结果与三题概率（新增供应商后用它验证，不用等真回合翻车）；下方是每条判定记录，一行看时间、动作、原因、回合与耗时，第二行是 `n/a/w` 三题概率加尾部正文摘要（超长自动省略号），点一行展开该条的供应商尝试与完整正文。可刷新与清空。
 
 ### 密钥怎么填
@@ -118,7 +118,7 @@ dsh plugin --profile <profile> add link:C:/Code/JS/dsh-early-stop-guard
   "id": "bamboonode",
   "label": "BambooNode System One",
   "kind": "decision",          // decision = HTTP 决策模型；llm = 复用聊天模型
-  "protocol": "systemone",     // systemone | openai
+  "protocol": "systemone",     // systemone | decisions | openai
   "baseUrl": "https://api.bamboonode.dev/v1",
   "model": "startlux-decision-27b-autothink",
   "apiKeyEnv": "BAMBOONODE_API_KEY"
@@ -128,6 +128,10 @@ dsh plugin --profile <profile> add link:C:/Code/JS/dsh-early-stop-guard
 `kind: "llm"` 的供应商走 DSH 自己的 `ctx.llm.stream`：`llmProvider` / `llmModel` 留空表示用**当前会话正在跑的模型**，填了就固定到那个路由。这就是链尾的托底。
 
 `protocol: "openai"` 的供应商默认按新一代 OpenAI 请求体发送（`max_completion_tokens`、带 `temperature: 0`）。不同网关的方言并不通用——GPT-5 系拒绝 `max_tokens`、也拒绝非默认 temperature，而 vLLM / Ollama / 部分代理只认 `max_tokens`——所以插件会按「`max_completion_tokens` + temperature → `max_tokens` + temperature → 只发 `max_completion_tokens` → 只发 `max_tokens` → 只发 messages」的顺序降级重试，**仅在 HTTP 400/422 且错误文本点名这几个参数时**降级（鉴权、额度、模型名错误立即失败，不重试），并把成功的写法按 `baseUrl|model` 记住，后续回合不再多打一次 400。`model` 留空会直接报 `provider <id> has no model configured: fill in Model in the Settings tab`，不会白跑一次请求。
+
+`protocol: "decisions"` 走 OpenAI 的 **Decisions API**：`POST <baseUrl>/decisions`，请求体是 `{ model, input, questions }`，三条 predicate 题各回一个概率——与 System One 回的是同一组事实，所以两种方言的判定可以互换。**`gpt-6-luna` 是目前唯一支持该端点的模型**，它是 Decisions 专用模型：不会出现在 `GET /v1/models` 列表里（别用列表判断可用性），输出 token 不计费，未命中缓存的输入按 $0.10/1M tokens 计。设置页底部的「新增 OpenAI Decisions（gpt-6-luna）」按钮会一次填好这一行（baseUrl `https://api.openai.com/v1`、model `gpt-6-luna`、`apiKeyEnv` `OPENAI_API_KEY`）。
+
+概率阈值在 `dm.threshold`（narrates，默认 0.5）/ `dm.waitThreshold`（waiting，0.5）/ `dm.askThreshold`（asks_user，0.4），**是全局的**：插件没有按供应商分别设阈值的字段。pi 侧的 `gpt-6-luna` 端点在 13 条标注语料上标到 0.65（7/7 召回、1/6 误报），但那份语料用的是 pi 的输入格式与端点级阈值，迁移过来需要重新标定——这里用全局 0.5，宁漏勿滥。
 
 一个供应商连续失败 `breaker.failures` 次后进入冷却，冷却期内不再发请求——一个挂掉的端点只花一次超时，而不是每个回合各花一次。
 
@@ -176,7 +180,7 @@ dsh plugin --profile <profile> add link:C:/Code/JS/dsh-early-stop-guard
 
 ```bash
 pnpm install
-pnpm test        # node:test，93 个用例
+pnpm test        # node:test，99 个用例
 ```
 
 目录：
