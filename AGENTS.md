@@ -36,6 +36,8 @@ ctx.on('agent/turn-stopping')
 8. **钩子路径上不得抛错。** 判定链任何异常都只影响本回合的续跑，不能让 turn-stopping 失败（那会卡住用户的回合）。新增分支要放进 `decideTurn`，由它返回 `stop`，不要在 `index.js` 里扔。
 9. **Config 的每个可编辑节点必须 `.volatile()`。** `SettingsForms.describe()` 用 `volatileForm(schema)` 过滤，没有任何 volatile 节点的 schema 会被整条丢弃，前端表现为「当前不可写 (unavailable)」；反过来，volatile 节点到 `apply()` 时是 `{ get() }` 引用，必须经 `resolveConfig()`/`unwrap()` 解引用，直接取值只会拿到包装对象。也禁止 volatile 嵌套 volatile。见 `test/config.test.js` 的前两例。
 10. **`connection.fetch.register` 的每条精确路由都要写 `requestBody`。** 省略不会报错（`assertFetchRoute` 不校验该字段），但请求会掉进共享 RPC 通道，返回 400/404；普通请求写 `'buffered'`，只有流式上传用 `'streaming'`。见 `test/routes.test.js`。
+11. **OpenAI 兼容供应商的请求体要按方言降级。** 参数名不通用：GPT-5 系拒绝 `max_tokens` 与非默认 `temperature`，vLLM/Ollama/部分代理只认 `max_tokens`。`callOpenaiCompatible` 按固定阶梯重试，**只在 400/422 且错误文本点名 `max_tokens`/`max_completion_tokens`/`temperature` 时**降级（鉴权/额度/模型名错误立即抛），成功写法按 `baseUrl|model` 缓存；`model` 为空直接抛明确错误，不发请求。见 `test/providers.test.js` 的 6 例。
+12. **密钥按供应商 id 索引。** 在设置页改掉某行 id 会让已存密钥变孤儿（判定报 `missing key`），因此 `/status` 回 `orphanKeys`（存了密钥但没有对应供应商的 id），设置页在裁判链下方提示。见 `test/routes.test.js`。
 
 ## 模块职责
 
@@ -45,7 +47,7 @@ ctx.on('agent/turn-stopping')
 | `lib/events.js` | 事件流读取与 `summarizeTurn`/`sawToolCallSince` | 无 |
 | `lib/heuristics.js` | `precheck`/`classifyText`/`heuristicAction`/`verdictAction` | 无 |
 | `lib/summary.js` | `clipTail`/`renderSummary`/`renderState` | 无 |
-| `lib/providers.js` | System One、OpenAI 兼容、宿主 LLM 三种裁判，熔断，按序尝试，取密钥 | `ctx.llm`（仅 llm 供应商，动态 import） |
+| `lib/providers.js` | System One、OpenAI 兼容（含请求体方言阶梯与缓存）、宿主 LLM 三种裁判，熔断，按序尝试，取密钥 | `ctx.llm`（仅 llm 供应商，动态 import） |
 | `lib/decide.js` | 整条判定链，返回 `{ act, record, exhausted, nextUsed }` | 无（`ctx` 透传） |
 | lib/logs.js | 内存环形 + JSONL 追加 | node:fs |
 | `lib/secrets.js` | 供应商密钥的独立存储（`secrets.json`，0600，串行写） | node:fs |
@@ -66,7 +68,7 @@ ctx.on('agent/turn-stopping')
 ## 测试
 
 ```bash
-pnpm test          # node --test，87 个用例
+pnpm test          # node --test，93 个用例
 ```
 
 - 单测覆盖：`heuristics`（闸门/分类/判定矩阵）、`events`（重建事实、窗口、锚定请求）、`summary`（截断、标签）、`config`（默认值/收敛/供应商过滤/volatile 与 `unwrap`）、`providers`（答案归一化、JSON 提取、熔断）、`logs`（环形、JSONL、hydrate、clear）、`secrets`（密钥文件）、`decide`（整链，含 stub fetch 校验 System One 线格式）。

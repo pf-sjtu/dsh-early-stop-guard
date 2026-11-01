@@ -76,6 +76,8 @@ dsh plugin --profile <profile> add link:C:/Code/JS/dsh-early-stop-guard
 ~/.dsh/early-stop-guard/secrets.json      # 0600，按供应商 id 存明文
 ```
 
+密钥按**供应商 id** 索引，所以：在设置页里给某一行存好密钥之后，**再改那一行的 id**，密钥就找不到主人了（判定时会报 `missing key for <新 id>`）。设置页检测到这种孤儿密钥会在裁判链下方提示 `已保存的密钥找不到对应供应商（改过 id？）：<旧 id>`，重新在该行保存一次密钥即可。
+
 三种给密钥的方式，按优先级：
 
 1. **在设置页直接填**：供应商卡片底部有 `API Key` 输入框（type=password），粘贴后点「保存密钥」，走 `POST /api/early-stop-guard/secret` 写入上面的文件。保存后徽标显示「已保存（本地文件）」，密钥**不回显**。点「清除密钥」删掉它。
@@ -125,6 +127,8 @@ dsh plugin --profile <profile> add link:C:/Code/JS/dsh-early-stop-guard
 
 `kind: "llm"` 的供应商走 DSH 自己的 `ctx.llm.stream`：`llmProvider` / `llmModel` 留空表示用**当前会话正在跑的模型**，填了就固定到那个路由。这就是链尾的托底。
 
+`protocol: "openai"` 的供应商默认按新一代 OpenAI 请求体发送（`max_completion_tokens`、带 `temperature: 0`）。不同网关的方言并不通用——GPT-5 系拒绝 `max_tokens`、也拒绝非默认 temperature，而 vLLM / Ollama / 部分代理只认 `max_tokens`——所以插件会按「`max_completion_tokens` + temperature → `max_tokens` + temperature → 只发 `max_completion_tokens` → 只发 `max_tokens` → 只发 messages」的顺序降级重试，**仅在 HTTP 400/422 且错误文本点名这几个参数时**降级（鉴权、额度、模型名错误立即失败，不重试），并把成功的写法按 `baseUrl|model` 记住，后续回合不再多打一次 400。`model` 留空会直接报 `provider <id> has no model configured: fill in Model in the Settings tab`，不会白跑一次请求。
+
 一个供应商连续失败 `breaker.failures` 次后进入冷却，冷却期内不再发请求——一个挂掉的端点只花一次超时，而不是每个回合各花一次。
 
 ## 日志
@@ -172,7 +176,7 @@ dsh plugin --profile <profile> add link:C:/Code/JS/dsh-early-stop-guard
 
 ```bash
 pnpm install
-pnpm test        # node:test，87 个用例
+pnpm test        # node:test，93 个用例
 ```
 
 目录：

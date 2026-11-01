@@ -68,17 +68,27 @@ test('every route is an exact /api route with a declared body mode', () => {
 })
 
 test('the status route reports the resolved chain without leaking keys', async () => {
-  const { ctx, routes } = createCtx()
-  apply(ctx, { providers: [{ id: 'p1', kind: 'llm' }] })
+  const dir = await mkdtemp(join(tmpdir(), 'esg-routes-'))
+  const previous = process.env.EARLY_STOP_GUARD_SECRETS_PATH
+  process.env.EARLY_STOP_GUARD_SECRETS_PATH = join(dir, 'secrets.json')
+  try {
+    const { ctx, routes } = createCtx()
+    apply(ctx, { providers: [{ id: 'p1', kind: 'llm' }] })
 
-  const status = routes.find(route => route.path.endsWith('/status'))
-  const payload = await (await status.fetch(new Request('http://x/api/early-stop-guard/status'))).json()
+    const status = routes.find(route => route.path.endsWith('/status'))
+    const payload = await (await status.fetch(new Request('http://x/api/early-stop-guard/status'))).json()
 
-  assert.equal(payload.enabled, true)
-  assert.equal(payload.mode, 'auto')
-  assert.deepEqual(payload.providers.map(provider => provider.id), ['p1'])
-  assert.equal(payload.providers[0].hasApiKey, null)
-  assert.equal(JSON.stringify(payload).includes('apiKey"'), false)
+    assert.equal(payload.enabled, true)
+    assert.equal(payload.mode, 'auto')
+    assert.deepEqual(payload.providers.map(provider => provider.id), ['p1'])
+    assert.equal(payload.providers[0].hasApiKey, null)
+    assert.deepEqual(payload.orphanKeys, [])
+    assert.equal(JSON.stringify(payload).includes('apiKey"'), false)
+  } finally {
+    if (previous === undefined) delete process.env.EARLY_STOP_GUARD_SECRETS_PATH
+    else process.env.EARLY_STOP_GUARD_SECRETS_PATH = previous
+    await rm(dir, { recursive: true, force: true })
+  }
 })
 
 test('a key posted to /secret is stored and never echoed back', async () => {
@@ -113,6 +123,13 @@ test('a key posted to /secret is stored and never echoed back', async () => {
     assert.equal(payload.providers[0].hasApiKey, true)
     assert.equal(payload.providers[0].apiKeySource, 'settings')
     assert.equal(JSON.stringify(payload).includes('sk-route-test'), false)
+    // A key whose provider id is not in the chain is reported, not silently lost:
+    // renaming a provider id in the form is what orphans a stored key.
+    assert.deepEqual(payload.orphanKeys, [])
+    await post('secret', { id: 'renamed-away', apiKey: 'sk-route-test' })
+    const after = await (await status.fetch(new Request('http://x/api/early-stop-guard/status'))).json()
+    assert.deepEqual(after.orphanKeys, ['renamed-away'])
+    assert.equal(JSON.stringify(after).includes('sk-route-test'), false)
 
     const cleared = await (await post('secret/clear', { id: 'p1' })).json()
     assert.deepEqual(cleared, { ok: true, id: 'p1', hasApiKey: false })
