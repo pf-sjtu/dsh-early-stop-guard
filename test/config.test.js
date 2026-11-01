@@ -2,12 +2,62 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {
+  Config,
   DEFAULT_PROVIDERS,
   DEFAULT_STEER_TEXT,
   QUESTIONS,
   normalizeProvider,
   resolveConfig,
+  unwrap,
 } from '../lib/config.js'
+
+/** Build a cosmokit volatile reference around a fixed value. */
+function volatileRef(value) {
+  const write = Symbol.for('cosmokit.volatile.write')
+  return { get: () => value, [write]: () => {} }
+}
+
+test('every editable field is volatile so the Settings page can show it', () => {
+  const volatileNodes = Object.entries(Config.dict)
+    .filter(([, node]) => node.meta?.volatile === true)
+    .map(([key]) => key)
+  assert.deepEqual(volatileNodes.sort(), [
+    'breaker', 'debug', 'dm', 'enabled', 'logs', 'maxContinuations',
+    'maxSteps', 'maxTailChars', 'providers', 'steerText',
+  ])
+})
+
+test('the provider chain ships a default so the form is never empty', () => {
+  assert.deepEqual(Config.dict.providers.meta.default, DEFAULT_PROVIDERS)
+})
+
+test('unwrap dereferences volatile nodes at any depth', () => {
+  const config = {
+    enabled: volatileRef(true),
+    dm: volatileRef({ mode: volatileRef('off'), threshold: volatileRef(0.7) }),
+    providers: volatileRef([{ id: volatileRef('p1'), timeoutMs: volatileRef(9000) }]),
+  }
+  assert.deepEqual(unwrap(config), {
+    enabled: true,
+    dm: { mode: 'off', threshold: 0.7 },
+    providers: [{ id: 'p1', timeoutMs: 9000 }],
+  })
+})
+
+test('resolveConfig reads values through volatile references', () => {
+  const policy = resolveConfig({
+    enabled: volatileRef(false),
+    maxContinuations: volatileRef(1),
+    dm: volatileRef({ mode: volatileRef('always') }),
+    providers: volatileRef([{ id: 'p1', kind: 'llm', enabled: volatileRef(false) }]),
+  })
+  assert.equal(policy.enabled, false)
+  assert.equal(policy.maxContinuations, 1)
+  assert.equal(policy.dm.mode, 'always')
+  // The only configured provider is disabled, so the chain is empty rather than
+  // silently falling back to the built-in default.
+  assert.deepEqual(policy.providers, [])
+})
 
 test('the three questions are the predicates the thresholds apply to', () => {
   assert.deepEqual(QUESTIONS.map(question => question.id), ['narrates', 'asks_user', 'waiting'])
