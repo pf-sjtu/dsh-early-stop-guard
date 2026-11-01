@@ -66,11 +66,12 @@ ctx.on('agent/turn-stopping')
 ## 测试
 
 ```bash
-pnpm test          # node --test，84 个用例
+pnpm test          # node --test，87 个用例
 ```
 
 - 单测覆盖：`heuristics`（闸门/分类/判定矩阵）、`events`（重建事实、窗口、锚定请求）、`summary`（截断、标签）、`config`（默认值/收敛/供应商过滤/volatile 与 `unwrap`）、`providers`（答案归一化、JSON 提取、熔断）、`logs`（环形、JSONL、hydrate、clear）、`secrets`（密钥文件）、`decide`（整链，含 stub fetch 校验 System One 线格式）。
-- 集成覆盖：`test/hook.test.js` 用真实 `apply()` + 假 ctx/agent 走完「旁白→steer→再旁白→耗预算」与「真完成→零调用」两条路；`test/routes.test.js` 断言六条 HTTP 路由的 path/methods/`requestBody`、密钥写入与 `/status` 载荷；`test/secrets.test.js` 覆盖密钥文件的读写、串行与容错；`test/client-bundle.test.js` 用 `node:vm` 跑 `lib/client.js`，验证 Settings 标签页注册与词典；`test/render.test.js` 用 `react-dom/server` 真渲染该标签页（满值、空值、无表单、只读四种）。
+- 集成覆盖：`test/hook.test.js` 用真实 `apply()` + 假 ctx/agent 走完「旁白→steer→再旁白→耗预算」与「真完成→零调用」两条路；`test/routes.test.js` 断言六条 HTTP 路由的 path/methods/`requestBody`、密钥写入与 `/status` 载荷；`test/secrets.test.js` 覆盖密钥文件的读写、串行与容错；`test/client-bundle.test.js` 用 `node:vm` 跑 `lib/client.js`，验证 Settings 标签页注册与词典；`test/render.test.js` 用 `react-dom/server` 真渲染该标签页（满值、空值、无表单、只读四种）；`test/styles.test.js` 截获注入的 CSS，断言 className 字面量都有对应规则、动态基类有定义、长文本列必须省略号。
+- 写日志是后台链：`add()` 不等待落盘，需要文件完整时用 `store.flush()`（`test/logs.test.js`），不要 `setTimeout` 赌时序。
 - 新增判定分支必须同时补 `test/decide.test.js` 的用例；改动阈值/顺序必须更新 `test/heuristics.test.js` 里的校准数值；改钩子接线必须补 `test/hook.test.js`。
 - 真实链路验证在隔离 profile 做：`dsh plugin --profile <name> add link:C:/Code/JS/dsh-early-stop-guard`，不要在别人正在用的 web profile 上试。
 

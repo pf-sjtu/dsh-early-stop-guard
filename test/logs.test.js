@@ -14,7 +14,8 @@ async function withStore(options, run) {
   try {
     await run(store, file, directory)
   } finally {
-    store.__dispose?.()
+    // Drain queued writes before the directory disappears.
+    await store.flush()
     await rm(directory, { recursive: true, force: true })
   }
 }
@@ -49,8 +50,8 @@ test('records are appended to the JSONL file and hydrated back', async () => {
   await withStore({ enabled: true }, async (store, file) => {
     store.add({ act: 'continue', reason: 'narrated', turn: 7 })
     store.add({ act: 'stop', reason: 'done', turn: 7 })
-    // The write is chained; wait for the queue to drain through clear-less read.
-    await new Promise(resolve => setTimeout(resolve, 50))
+    // Writes are chained in the background; wait for the queue instead of a sleep.
+    await store.flush()
     const text = await readFile(file, 'utf8')
     const lines = text.trim().split('\n')
     assert.equal(lines.length, 2)
@@ -61,6 +62,8 @@ test('records are appended to the JSONL file and hydrated back', async () => {
     assert.deepEqual(revived.list().map(record => record.reason), ['done', 'narrated'])
     // Ids keep counting from the hydrated maximum.
     assert.equal(revived.add({ act: 'stop', reason: 'later' }).id, 3)
+    // Let the revived store finish writing before the temp directory goes away.
+    await revived.flush()
   })
 })
 
