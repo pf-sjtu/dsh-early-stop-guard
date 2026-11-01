@@ -65,17 +65,24 @@ dsh plugin --profile <profile> add link:C:/Code/JS/dsh-early-stop-guard
 三个面板，都在同一个标签页里：
 
 - **策略**：总开关、每回合最多续跑次数、判定模式、三个概率阈值、注入给模型的话。改动即时保存。
-- **裁判供应商链**：按顺序尝试，先成功者生效。每行可改 kind / 协议 / Base URL / 模型 / 环境变量名，可上下移动、可删除、可禁用；底部有「新增供应商」「新增 OpenAI 兼容决策模型」「新增 LLM 托底」三个按钮。
+- **裁判供应商链**：按顺序尝试，先成功者生效。每行可改 kind / 协议 / Base URL / 模型 / 环境变量名 / 超时，行内直接填密钥（见下），可上下移动、可删除、可禁用；底部有「新增供应商」「新增 OpenAI 兼容决策模型」「新增 LLM 托底」三个按钮。
 - **试判 + 判定记录**：粘贴一段正文立刻看判定结果与三题概率（新增供应商后用它验证，不用等真回合翻车）；下方是每条判定记录，含时间、动作、原因、回合、三题概率、耗时、尾部正文，可刷新与清空。
 
-### 密钥为什么不进设置
+### 密钥怎么填
 
-DSH 的设置 wire 会把 `role: secret` 字段抹掉，所以「用整体覆盖的方式保存一个含密钥的数组」会把密钥删掉。本插件因此**只存环境变量名**（`apiKeyEnv`），密钥放进程环境或 `.env`：
+决策模型供应商需要密钥。密钥**不走设置 wire**（DSH 会把 `role: secret` 字段抹掉，整体覆盖数组会顺手删掉密钥），而是存进本机的一个独立文件：
 
-```bash
-BAMBOONODE_API_KEY=...      # 默认决策模型
-OPENAI_API_KEY=...          # 自建 OpenAI 兼容决策模型时
 ```
+~/.dsh/early-stop-guard/secrets.json      # 0600，按供应商 id 存明文
+```
+
+三种给密钥的方式，按优先级：
+
+1. **在设置页直接填**：供应商卡片底部有 `API Key` 输入框（type=password），粘贴后点「保存密钥」，走 `POST /api/early-stop-guard/secret` 写入上面的文件。保存后徽标显示「已保存（本地文件）」，密钥**不回显**。点「清除密钥」删掉它。
+2. **环境变量**：供应商行里的 `apiKeyEnv` 写变量名（如 `BAMBOONODE_API_KEY`），密钥放进程环境或 `.env`。GUI 进程常常没有这个变量，所以设置页里直接填更可靠。
+3. **两者都有时**：设置页保存的密钥优先，环境变量兜底。
+
+`POST /test` 的响应里只会出现「哪个供应商失败、失败原因」，不会出现密钥值。
 
 ## 配置
 
@@ -136,14 +143,18 @@ OPENAI_API_KEY=...          # 自建 OpenAI 兼容决策模型时
 
 ## HTTP 接口
 
-设置页读的四个路由（`ctx.connection.fetch.register`，headless profile 无 Connection 服务时自动不注册）：
+设置页读的六个路由（`ctx.connection.fetch.register`，headless profile 无 Connection 服务时自动不注册）：
 
 | 方法 | 路径 | 作用 |
 |---|---|---|
-| GET | `/api/early-stop-guard/status` | 生效配置、供应商、熔断状态、日志位置 |
+| GET | `/api/early-stop-guard/status` | 生效配置、供应商（含密钥是否就位）、熔断状态、日志位置 |
 | GET | `/api/early-stop-guard/logs?limit=100` | 判定记录，最新在前 |
 | POST | `/api/early-stop-guard/logs/clear` | 清空 |
+| POST | `/api/early-stop-guard/secret` | 存一个供应商的密钥（`{id, apiKey}`），写入 `secrets.json` |
+| POST | `/api/early-stop-guard/secret/clear` | 删除某个供应商的密钥（`{id}`） |
 | POST | `/api/early-stop-guard/test` | 用一条正文跑一次真实裁判链 |
+
+所有路由都必须声明 `requestBody: 'buffered'`：省略不会报错，但请求会落进共享 RPC 通道并返回 400/404。
 
 ## 边界
 
@@ -161,7 +172,7 @@ OPENAI_API_KEY=...          # 自建 OpenAI 兼容决策模型时
 
 ```bash
 pnpm install
-pnpm test        # node:test，77 个用例
+pnpm test        # node:test，84 个用例
 ```
 
 目录：

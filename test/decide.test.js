@@ -182,7 +182,7 @@ test('decideTurn skips a provider whose key is missing', async () => {
     const decision = await decideTurn({ policy, summary: narration, events, turn: 1, used: 0, ctx: {}, breaker: createBreaker({ failures: 3, cooldownMs: 1000 }) })
     assert.equal(called, false)
     assert.equal(decision.act, 'stop')
-    assert.match(decision.record.attempts[0].error, /missing env ESG_TEST_KEY/)
+    assert.match(decision.record.attempts[0].error, /missing key for test: .*ESG_TEST_KEY/)
   } finally {
     restore()
   }

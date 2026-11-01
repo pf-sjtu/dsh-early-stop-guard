@@ -103,6 +103,12 @@ test('the tab renders with a full config value', () => {
   assert.match(html, /继续：你还没做完。/, 'the steer text is shown for editing')
   assert.match(html, /bamboonode/, 'the provider chain lists its first row')
   assert.match(html, /session-llm/, 'the provider chain lists the fallback row')
+  // Only a decision provider needs a key, and it is entered as a password field
+  // that posts straight to the host instead of going through the settings form.
+  assert.equal(html.match(/type="password"/g)?.length, 1)
+  assert.match(html, /saveKey/)
+  assert.match(html, /clearKey/)
+  assert.match(html, /keyHint/)
 })
 
 test('the tab survives an empty value without throwing', () => {
