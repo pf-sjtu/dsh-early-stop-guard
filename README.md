@@ -86,6 +86,10 @@ dsh plugin --profile <profile> add link:C:/Code/JS/dsh-early-stop-guard
 
 `POST /test` 的响应里只会出现「哪个供应商失败、失败原因」，不会出现密钥值。
 
+### 深浅色
+
+设置页跟随宿主主题：所有颜色取自宿主的 `--dsw-alias-*` 令牌（文字、边框、填充、状态色、代码块底色、圆角、等宽字体），深色由 `body[data-ds-dark-theme]` 切换，创建色用 `color-mix(in srgb, var(--dsw-alias-label-primary) N%, transparent)` 从前景色派生——不要用 `bg-layer-*` 当灰色块（浅色下它们是白色）。`.esg-root` 还会在深色下声明 `color-scheme: dark`，否则原生 `<select>` 弹层会按系统方案开成白底。宿主皮肤（如 claude 风格）改品牌色时按钮会跟着变，因为品牌色也是令牌。
+
 ## 配置
 
 `Config` 由 schemastery 定义，设置页从 schema 自动生成；手改 `cordis.patch.yml` 也会被 `resolveConfig` 收敛回合法区间。
@@ -180,7 +184,7 @@ dsh plugin --profile <profile> add link:C:/Code/JS/dsh-early-stop-guard
 
 ```bash
 pnpm install
-pnpm test        # node:test，99 个用例
+pnpm test        # node:test，100 个用例
 ```
 
 目录：

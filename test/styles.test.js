@@ -99,6 +99,35 @@ test('class names are only built from defined pieces', () => {
   }
 })
 
+test('the tab borrows the host palette so it follows the app theme', () => {
+  const css = collectStyles()
+  // DSH redefines these alias tokens under `body[data-ds-dark-theme]`, so reading
+  // them is what keeps the tab readable in both palettes instead of painting
+  // light-mode greys over a dark page.
+  const tokens = [
+    '--dsw-alias-label-primary',
+    '--dsw-alias-label-secondary',
+    '--dsw-alias-border-l3',
+    '--dsw-alias-brand-primary',
+    '--dsw-alias-state-success-primary',
+    '--dsw-alias-markdown-code-block',
+  ]
+  for (const token of tokens) {
+    assert.ok(css.includes(`var(${token}`), `the sheet must read ${token} from the host`)
+  }
+  // A native <select> popup follows `color-scheme`, not our colours: without this
+  // the list opens white inside the dark app.
+  assert.match(
+    css,
+    /body\[data-ds-dark-theme\]\s*\.esg-root\s*\{\s*color-scheme:\s*dark/,
+    'the dark palette must pin the native control scheme',
+  )
+  const control = css.match(/\.esg-control\s*\{([^}]*)\}/)
+  assert.ok(control, '.esg-control must be styled')
+  assert.match(control[1], /background:\s*var\(--esg-fill\)/, 'the field must take its fill from the palette')
+  assert.match(control[1], /color:\s*var\(--dsw-alias-label-primary/, 'the field text must take its colour from the palette')
+})
+
 test('the decision list truncates its trailing text instead of growing', () => {
   const css = collectStyles()
   const rule = css.match(/\.esg-log-text\s*\{([^}]*)\}/)
